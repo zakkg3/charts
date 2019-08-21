@@ -37,12 +37,7 @@ We truncate at 63 chars because some Kubernetes name fields are limited to this 
 {{- if .Values.fullnameOverride -}}
 {{- printf "%s-%s" .Values.fullnameOverride "mongodb" | trunc 63 | trimSuffix "-" -}}
 {{- else -}}
-{{- $name := default .Chart.Name .Values.nameOverride -}}
-{{- if contains $name .Release.Name -}}
 {{- printf "%s-%s" .Release.Name "mongodb" | trunc 63 | trimSuffix "-" -}}
-{{- else -}}
-{{- printf "%s-%s-%s" .Release.Name $name "mongodb" | trunc 63 | trimSuffix "-" -}}
-{{- end -}}
 {{- end -}}
 {{- end -}}
 
@@ -64,7 +59,19 @@ If not using ClusterIP, or if a host or LoadBalancerIP is not defined, the value
 */}}
 {{- define "parse.host" -}}
 {{- $host := default "" .Values.server.host -}}
+{{- if .Values.ingress.enabled -}}
+{{- $ingressHost := first .Values.ingress.server.hosts -}}
+{{- $host = default $ingressHost.name $host -}}
+{{- end -}}
 {{- default (include "parse.serviceIP" .) $host -}}
+{{- end -}}
+
+{{/*
+Gets the port to access Parse outside the cluster.
+When using ingress, we should use the port 80 instead of service.port
+*/}}
+{{- define "parse.external-port" -}}
+{{- ternary "80" .Values.server.port .Values.ingress.enabled -}}
 {{- end -}}
 
 {{/*
@@ -186,5 +193,25 @@ Also, we can't use a single if because lazy evaluation is not an option
     {{- end -}}
 {{- else -}}
     {{- printf "%s/%s:%s" $registryName $repositoryName $tag -}}
+{{- end -}}
+{{- end -}}
+
+{{/*
+Return  the proper Storage Class
+*/}}
+{{- define "parse.storageClass" -}}
+{{- $storageClass := "" }}
+{{- if .Values.persistence.storageClass -}}
+    {{- $storageClass = .Values.persistence.storageClass -}}
+{{- end -}}
+{{- if .Values.global -}}
+    {{- if .Values.global.storageClass -}}
+        {{- $storageClass = .Values.global.storageClass -}}
+    {{- end -}}
+{{- end -}}
+{{- if (eq "-" $storageClass) -}}
+    {{- printf "\"\"" -}}
+{{- else }}
+    {{- printf "%s" $storageClass -}}
 {{- end -}}
 {{- end -}}
